@@ -41,7 +41,7 @@ export function MapCanvas({ mapState, onNodeClick, isLoading, fogLevel = 5 }: Ma
       style={{
         position: "absolute",
         inset: 0,
-        backgroundColor: fogLevel === 0 ? "#0a0a0f" : "#0c0c14",
+        backgroundColor: "transparent",
         transition: "background-color 600ms ease-out",
         overflow: "hidden",
       }}
