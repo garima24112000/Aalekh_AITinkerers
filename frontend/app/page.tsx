@@ -1,10 +1,12 @@
 "use client"
 import { useState } from "react"
 import { OracleState } from "@/types/oracle"
-import { mockInterrogationState } from "@/mock/mockState"
+import { mockInterrogationState, mockExplorationState } from "@/mock/mockState"
 import InterrogationPanel from "@/components/InterrogationPanel"
 import ConstraintBlock from "@/components/ConstraintBlock"
 import AdaptiveSidebar from "@/components/AdaptiveSidebar"
+import MapCanvas from "@/components/MapCanvas"
+import TimelineScrubber from "@/components/TimelineScrubber"
 
 interface ConstraintBlockData {
   label: string
@@ -19,6 +21,9 @@ export default function Home() {
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [constraintBlocks, setConstraintBlocks] = useState<ConstraintBlockData[]>([])
   const [state, setState] = useState<OracleState>(mockInterrogationState)
+  const [currentPosition, setCurrentPosition] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
+  const [fogLevel, setFogLevel] = useState(0) // 0-5
 
   // This will be replaced by useCoAgent from Phase 1
   const activeNode = state.mapState.nodes.find(n => n.id === state.mapState.activeNodeId) ?? null
@@ -32,6 +37,9 @@ export default function Home() {
 
   const handleAnswerSubmit = (answer: string, dimension: string, block: { label: string; x: number; y: number }) => {
     setConstraintBlocks(prev => [...prev, { ...block, id: `block-${Date.now()}` }])
+    const newConstraintCount = state.constraints.length + 1
+    setFogLevel(newConstraintCount) // Fog clears as constraints are added
+    
     setState(prev => ({
       ...prev,
       constraints: [...prev.constraints, {
@@ -47,9 +55,59 @@ export default function Home() {
 
   const handleConfirmIgnition = () => {
     setPhase("exploration")
-    setState(prev => ({ ...prev, phase: "exploration" }))
+    setFogLevel(5) // Full clarity
+    setState(mockExplorationState) // Load mock exploration state with full map
+    setCurrentPosition(state.explorationHistory.length)
     setTimeout(() => setPanelCollapsed(true), 800)
     // Phase 1 will trigger map_generator here
+  }
+
+  const handleNodeClick = async (nodeId: string) => {
+    console.log("Node clicked:", nodeId)
+    setIsLoading(true)
+    
+    // Update active node immediately
+    setState((prev: OracleState) => ({
+      ...prev,
+      mapState: {
+        ...prev.mapState,
+        activeNodeId: nodeId,
+      },
+    }))
+
+    // In real implementation, this would call Phase 1's clickNode action
+    setTimeout(() => {
+      setIsLoading(false)
+      // Child nodes would be added to state here by Phase 1
+    }, 1500)
+  }
+
+  const handleRewind = (eventIndex: number) => {
+    console.log("Rewinding to:", eventIndex)
+    setCurrentPosition(eventIndex)
+    
+    // Restore the map snapshot from that point
+    const event = state.explorationHistory[eventIndex]
+    if (event) {
+      setState((prev: OracleState) => ({
+        ...prev,
+        mapState: event.mapSnapshot,
+      }))
+    }
+  }
+
+  const handleFork = (answerIndex: number) => {
+    console.log("Fork requested at:", answerIndex)
+    // In real implementation, this would re-open interrogation panel with that question
+    alert(`Fork from answer ${answerIndex + 1} - Re-opening interrogation panel (to be implemented)`)
+  }
+
+  const handleSwitchBranch = (branchId: string) => {
+    console.log("Switching to branch:", branchId)
+    setState((prev: OracleState) => ({
+      ...prev,
+      activeBranchId: branchId,
+    }))
   }
 
   if (phase === "entry") {
@@ -130,13 +188,13 @@ export default function Home() {
           />
         </div>
 
-        {/* Center — Map canvas (Person 4 owns this, we just scaffold the container) */}
+        {/* Center — Map canvas */}
         <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
 
-          {/* Fog overlay — phase-driven */}
+          {/* Fog overlay — phase-driven (keep for interrogation phase) */}
           {phase === "interrogation" && (
             <div style={{
-              position: "absolute", inset: 0, zIndex: 10, pointerEvents: "none",
+              position: "absolute", inset: 0, zIndex: 5, pointerEvents: "none",
               background: "radial-gradient(ellipse at center, rgba(8,8,16,0.3) 0%, rgba(8,8,16,0.85) 100%)",
               transition: "opacity 600ms",
             }} />
@@ -147,42 +205,28 @@ export default function Home() {
             <ConstraintBlock key={block.id} label={block.label} x={block.x} y={block.y} />
           ))}
 
-          {/* Placeholder for Person 4's MapCanvas */}
-          <div style={{
-            position: "absolute", inset: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            {phase === "interrogation" && (
-              <p style={{ color: "rgba(255,255,255,0.1)", fontSize: "12px", letterSpacing: "0.1em" }}>
-                Map forming…
-              </p>
-            )}
-            {phase === "exploration" && (
-              <p style={{ color: "rgba(255,255,255,0.1)", fontSize: "12px", letterSpacing: "0.1em" }}>
-                {"← Person 4's MapCanvas renders here"}
-              </p>
-            )}
-          </div>
+          {/* MapCanvas Component */}
+          <MapCanvas
+            mapState={state.mapState}
+            onNodeClick={handleNodeClick}
+            isLoading={isLoading}
+            fogLevel={fogLevel}
+          />
         </div>
 
         {/* Right — Adaptive Sidebar */}
         <AdaptiveSidebar activeNode={activeNode} />
       </div>
 
-      {/* Bottom — Timeline scrubber placeholder for Person 4 */}
+      {/* Bottom — Timeline scrubber */}
       {phase === "exploration" && (
-        <div style={{
-          height: "80px",
-          borderTop: "1px solid rgba(255,255,255,0.08)",
-          background: "rgba(255,255,255,0.02)",
-          display: "flex", alignItems: "center", padding: "0 60px",
-          flexShrink: 0,
-          animation: "slideUp 300ms ease-out",
-        }}>
-          <p style={{ color: "rgba(255,255,255,0.15)", fontSize: "11px", letterSpacing: "0.1em" }}>
-            {"← Person 4's Timeline Scrubber renders here"}
-          </p>
-        </div>
+        <TimelineScrubber
+          state={state}
+          onRewind={handleRewind}
+          onFork={handleFork}
+          onSwitchBranch={handleSwitchBranch}
+          currentPosition={currentPosition}
+        />
       )}
 
       <style>{`
