@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+
+# Environment — never commit secrets
+.env
+.env.local
+.env*.local
+
+# Node
+node_modules/
+.next/
+
+# IDE
+.idea/
+.vscode/
+
+# Docker
+redis_data/
