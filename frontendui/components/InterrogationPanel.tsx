@@ -3,19 +3,16 @@ import { useState, useEffect, useRef, KeyboardEvent } from "react"
 import { OracleState } from "@/types/oracle"
 import ConstraintSummaryCard from "./ConstraintSummaryCard"
 
-const MOCK_QUESTIONS = [
-  { q: "Are you leaving a full-time job to do this, or is this already your primary income?", dimension: "resources" as const },
-  { q: "Do you want to work with many small clients, or go deep with a few larger ones?", dimension: "market" as const },
-  { q: "What's more important right now — income stability or creative freedom?", dimension: "riskTolerance" as const },
-  { q: "Do you have an existing network you can sell into, or are you starting cold?", dimension: "founderContext" as const },
-  { q: "What's your target monthly income to feel financially safe?", dimension: "timeline" as const },
-]
-
 interface QAPair { question: string; answer: string }
 
 interface Props {
   state: OracleState
+  currentQuestion: string
+  currentTargetDimension: string
+  isLastQuestion: boolean
+  questionCount: number
   onAnswerSubmit: (answer: string, dimension: string, block: { label: string; x: number; y: number }) => void
+  onSendAnswer: (answer: string) => void
   onConfirmIgnition: () => void
   collapsed: boolean
   onExpandPanel: () => void
@@ -51,29 +48,66 @@ function TypewriterText({ text }: { text: string }) {
   )
 }
 
-export default function InterrogationPanel({ state, onAnswerSubmit, onConfirmIgnition, collapsed, onExpandPanel }: Props) {
+export default function InterrogationPanel({
+  state,
+  currentQuestion,
+  currentTargetDimension,
+  isLastQuestion,
+  questionCount,
+  onAnswerSubmit,
+  onSendAnswer,
+  onConfirmIgnition,
+  collapsed,
+  onExpandPanel,
+}: Props) {
   const [history, setHistory] = useState<QAPair[]>([])
-  const [qIndex, setQIndex] = useState(0)
-  const [currentQ, setCurrentQ] = useState(MOCK_QUESTIONS[0].q)
+  const [displayedQuestion, setDisplayedQuestion] = useState("")
   const [input, setInput] = useState("")
   const [showSummary, setShowSummary] = useState(false)
   const [questionKey, setQuestionKey] = useState(0)
+  const [waitingForQuestion, setWaitingForQuestion] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const historyRef = useRef<HTMLDivElement>(null)
+  const prevQuestionRef = useRef("")
 
-  useEffect(() => { inputRef.current?.focus() }, [currentQ])
+  // When currentQuestion changes from backend, update the displayed question
+  useEffect(() => {
+    if (currentQuestion && currentQuestion !== prevQuestionRef.current) {
+      prevQuestionRef.current = currentQuestion
+      setDisplayedQuestion(currentQuestion)
+      setQuestionKey(k => k + 1)
+      setWaitingForQuestion(false)
+    }
+  }, [currentQuestion])
+
+  // Show summary when all dimensions covered and phase transitions
+  useEffect(() => {
+    const phase = state.phase
+    if (
+      (phase === "ignition" || phase === "map_generation") &&
+      state.constraints?.length >= 5
+    ) {
+      setShowSummary(true)
+    }
+  }, [state.phase, state.constraints?.length])
+
+  useEffect(() => { inputRef.current?.focus() }, [displayedQuestion])
 
   useEffect(() => {
     if (historyRef.current) historyRef.current.scrollTop = historyRef.current.scrollHeight
   }, [history])
 
-  const handleSubmit = () => {
-    if (!input.trim() || showSummary) return
-    const answer = input.trim()
-    const dim = MOCK_QUESTIONS[qIndex]?.dimension ?? "resources"
+  const totalQuestions = 5 // 5 dimensions
+  const currentQNum = (state.constraints?.length ?? 0) + 1
 
-    setHistory(prev => [...prev, { question: currentQ, answer }])
+  const handleSubmit = () => {
+    if (!input.trim() || showSummary || waitingForQuestion) return
+    const answer = input.trim()
+    const dim = currentTargetDimension || "resources"
+
+    setHistory(prev => [...prev, { question: displayedQuestion, answer }])
     setInput("")
+    setWaitingForQuestion(true)
 
     const shortLabel = answer.length > 22 ? answer.slice(0, 22) + "…" : answer
     onAnswerSubmit(answer, dim, {
@@ -82,16 +116,8 @@ export default function InterrogationPanel({ state, onAnswerSubmit, onConfirmIgn
       y: 32 + Math.random() * 36,
     })
 
-    const next = qIndex + 1
-    if (next < MOCK_QUESTIONS.length) {
-      setTimeout(() => {
-        setCurrentQ(MOCK_QUESTIONS[next].q)
-        setQIndex(next)
-        setQuestionKey(k => k + 1)
-      }, 350)
-    } else {
-      setTimeout(() => setShowSummary(true), 350)
-    }
+    // The actual message sending to backend is handled by onSendAnswer
+    // which is called from onAnswerSubmit → page.tsx → sendMessage
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -119,7 +145,9 @@ export default function InterrogationPanel({ state, onAnswerSubmit, onConfirmIgn
     )
   }
 
-  const coverageCount = Object.values(state.dimensionCoverage).filter(Boolean).length
+  const coverageCount = state.dimensionCoverage
+    ? Object.values(state.dimensionCoverage).filter(Boolean).length
+    : 0
 
   return (
     <div style={{
@@ -144,7 +172,7 @@ export default function InterrogationPanel({ state, onAnswerSubmit, onConfirmIgn
           {(["resources", "market", "riskTolerance", "founderContext", "timeline"] as const).map(dim => (
             <div key={dim} style={{
               flex: 1, height: "3px", borderRadius: "2px",
-              background: state.dimensionCoverage[dim] ? "var(--accent-blue)" : "rgba(255,255,255,0.08)",
+              background: state.dimensionCoverage?.[dim] ? "var(--accent-blue)" : "rgba(255,255,255,0.08)",
               transition: "background 400ms",
             }} />
           ))}
@@ -169,31 +197,35 @@ export default function InterrogationPanel({ state, onAnswerSubmit, onConfirmIgn
           )
         })}
 
-        {/* Current question */}
-        {!showSummary && (
+        {/* Current question — from backend */}
+        {!showSummary && displayedQuestion && (
           <div key={questionKey} style={{ animation: "fadeIn 300ms ease-out" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--accent-amber)", animation: "pulseGlow 1.5s ease-in-out infinite" }} />
               <span style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--accent-amber)", letterSpacing: "0.1em" }}>
-                Q{qIndex + 1} OF {MOCK_QUESTIONS.length}
+                Q{currentQNum} OF {totalQuestions}
               </span>
             </div>
             <p style={{ fontSize: "13px", color: "var(--text-primary)", lineHeight: 1.7 }}>
-              <TypewriterText key={questionKey} text={currentQ} />
+              <TypewriterText key={questionKey} text={displayedQuestion} />
             </p>
+          </div>
+        )}
+
+        {/* Waiting for backend question */}
+        {!showSummary && !displayedQuestion && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "16px 0" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent-blue)", animation: "pulseGlow 1s ease-in-out infinite" }} />
+            <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>
+              {waitingForQuestion ? "Processing answer…" : "Connecting to Oracle…"}
+            </span>
           </div>
         )}
 
         {/* Summary card */}
         {showSummary && (
           <ConstraintSummaryCard
-            constraints={state.constraints.length >= 5 ? state.constraints : [
-              { id: "c1", dimension: "resources", type: "anchor", value: "Leaving full-time job · 3 months runway", answeredAt: "", timelineIndex: 0 },
-              { id: "c2", dimension: "market", type: "shaper", value: "2–3 high-touch clients preferred", answeredAt: "", timelineIndex: 1 },
-              { id: "c3", dimension: "riskTolerance", type: "eliminator", value: "Income stability over creative risk", answeredAt: "", timelineIndex: 2 },
-              { id: "c4", dimension: "founderContext", type: "shaper", value: "Warm network from 6 years in tech", answeredAt: "", timelineIndex: 3 },
-              { id: "c5", dimension: "timeline", type: "anchor", value: "$8,000/month target", answeredAt: "", timelineIndex: 4 },
-            ]}
+            constraints={state.constraints ?? []}
             problem={state.problem}
             onConfirm={onConfirmIgnition}
           />
@@ -202,7 +234,7 @@ export default function InterrogationPanel({ state, onAnswerSubmit, onConfirmIgn
 
       {/* Input */}
       {!showSummary && (
-        <div style={{ padding: "14px 18px", borderTop: "1px solid var(--border-dim)", flexShrink: 0 }}>
+        <div style={{ padding: "14px 18px", borderTop: "1px solid var(--border-dim)", flexShrink: 0, opacity: waitingForQuestion ? 0.5 : 1, transition: "opacity 200ms" }}>
           <div
             style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-mid)", borderRadius: "2px", padding: "10px 12px", transition: "border-color 200ms" }}
             onFocusCapture={e => e.currentTarget.style.borderColor = "rgba(61,142,240,0.4)"}
@@ -214,7 +246,8 @@ export default function InterrogationPanel({ state, onAnswerSubmit, onConfirmIgn
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Your answer…"
+              placeholder={waitingForQuestion ? "Waiting for next question…" : "Your answer…"}
+              disabled={waitingForQuestion || !displayedQuestion}
               style={{ flex: 1, background: "transparent", border: "none", fontSize: "12px", color: "var(--text-primary)" }}
             />
             <span style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>↵</span>

@@ -1,4 +1,4 @@
-import { OracleState, MapState } from "@/types/oracle"
+import { OracleState, MapState, DimensionCoverage } from "@/types/oracle"
 
 const emptyMap: MapState = {
   nodes: [],
@@ -53,10 +53,18 @@ export const mockInterrogationState: OracleState = {
   problem: "I want to go freelance as a UX designer and build a sustainable business.",
   constraints: baseConstraints.slice(0, 2),
   dimensionCoverage: { resources: true, timeline: false, riskTolerance: false, market: true, founderContext: false },
+  currentQuestion: "",
+  currentTargetDimension: "",
+  isLastQuestion: false,
   mapState: emptyMap,
   explorationHistory: [],
   branches: [],
   activeBranchId: "main",
+  forkIndex: -1,
+  forkNewAnswer: "",
+  forkOriginalAnswer: "",
+  forkDimension: "",
+  expandNodeId: "",
 }
 
 export const mockIgnitionState: OracleState = {
@@ -78,6 +86,7 @@ export const mockExplorationState: OracleState = {
     { index: 4, timestamp: new Date().toISOString(), type: "answer", nodeId: null, answer: "$8k/month", mapSnapshot: emptyMap },
     { index: 5, timestamp: new Date().toISOString(), type: "nodeClick", nodeId: "n3", answer: null, mapSnapshot: fullMap },
   ],
+  expandNodeId: "",
 }
 
 export const mockForkState: OracleState = {
@@ -90,4 +99,8 @@ export const mockForkState: OracleState = {
     mapSnapshot: { ...fullMap, nodes: fullMap.nodes.map(n => n.id === "n5" ? { ...n, conflictFlag: false } : n) },
   }],
   activeBranchId: "main",
+  forkIndex: -1,
+  forkNewAnswer: "",
+  forkOriginalAnswer: "",
+  forkDimension: "",
 }

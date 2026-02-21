@@ -126,9 +126,10 @@ export default function AdaptiveSidebar({ activeNode }: Props) {
 
   if (!activeNode && !visible) return null
 
-  const Template = currentNode ? templates[currentNode.category] : null
-  const color = currentNode ? CATEGORY_COLORS[currentNode.category] : "var(--accent-blue)"
-  const categoryLabel = currentNode ? CATEGORY_LABELS[currentNode.category] : ""
+  const nodeCategory = currentNode?.category ?? "strategic"
+  const Template = currentNode ? templates[nodeCategory] : null
+  const color = currentNode ? CATEGORY_COLORS[nodeCategory] : "var(--accent-blue)"
+  const categoryLabel = currentNode ? CATEGORY_LABELS[nodeCategory] : ""
 
   return (
     <div style={{ width: visible ? "210px" : "0px", minWidth: visible ? "210px" : "0px", overflow: "hidden", transition: "width 280ms cubic-bezier(0.16,1,0.3,1), min-width 280ms cubic-bezier(0.16,1,0.3,1)", background: "var(--bg-panel)", borderLeft: "1px solid var(--border-dim)", display: "flex", flexDirection: "column" }}>

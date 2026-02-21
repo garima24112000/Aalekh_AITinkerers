@@ -1,5 +1,5 @@
 import React, { useState, CSSProperties } from "react";
-import { OracleNode as NodeType } from "@/types/oracle";
+import { OracleNode as NodeType, NodeCategory } from "@/types/oracle";
 
 interface OracleNodeProps {
   node: NodeType;

@@ -20,7 +20,7 @@ from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 from copilotkit import LangGraphAGUIAgent
 
 from config import AGENT_HOST, AGENT_PORT
-from agent.graph import oracle_graph
+from agent.graph import oracle_graph, init_async_checkpointer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,6 +64,13 @@ async def health():
     return {"status": "ok", "agent": "oracle_agent"}
 
 
+# ── Startup: swap in async Redis checkpointer ───────────────────────
+
+@app.on_event("startup")
+async def on_startup():
+    await init_async_checkpointer()
+
+
 # ── Run ──────────────────────────────────────────────────────────────
 
 def main():
@@ -72,7 +79,7 @@ def main():
         "agent.server:app",
         host=AGENT_HOST,
         port=AGENT_PORT,
-        reload=True,
+        reload=False,
     )
 
 

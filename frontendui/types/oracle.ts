@@ -1,4 +1,4 @@
-export type Phase = "entry" | "interrogation" | "ignition" | "exploration"
+export type Phase = "entry" | "interrogation" | "ignition" | "exploration" | "map_generation"
 
 export type Dimension =
   | "resources"
@@ -27,7 +27,8 @@ export interface OracleNode {
   parentId: string | null
   conflictFlag: boolean
   conflictReason: string
-  category: NodeCategory
+  category?: NodeCategory
+  dimension?: string
   x: number
   y: number
 }
@@ -52,6 +53,9 @@ export interface HistoryEntry {
   mapSnapshot: MapState
 }
 
+// Alias matching backend naming
+export type ExplorationEntry = HistoryEntry
+
 export interface Branch {
   branchId: string
   forkIndex: number
@@ -60,14 +64,71 @@ export interface Branch {
   mapSnapshot: MapState
 }
 
+export interface DimensionCoverage {
+  resources: boolean
+  timeline: boolean
+  riskTolerance: boolean
+  market: boolean
+  founderContext: boolean
+}
+
 export interface OracleState {
   sessionId: string
   phase: Phase
   problem: string
   constraints: Constraint[]
-  dimensionCoverage: Record<Dimension, boolean>
+  dimensionCoverage: DimensionCoverage
+
+  // Interrogation — live from backend
+  currentQuestion: string
+  currentTargetDimension: string
+  isLastQuestion: boolean
+
+  // Map
   mapState: MapState
+
+  // Exploration history + branching
   explorationHistory: HistoryEntry[]
   branches: Branch[]
   activeBranchId: string
+
+  // Fork context (set before calling fork_regenerator)
+  forkIndex: number
+  forkNewAnswer: string
+  forkOriginalAnswer: string
+  forkDimension: string
+
+  // Expansion context (set before calling expander)
+  expandNodeId: string
+
+  // CopilotKit message list
+  messages?: any[]
+}
+
+/** Default empty state used before first backend sync */
+export const DEFAULT_ORACLE_STATE: OracleState = {
+  sessionId: "",
+  phase: "entry",
+  problem: "",
+  constraints: [],
+  dimensionCoverage: {
+    resources: false,
+    timeline: false,
+    riskTolerance: false,
+    market: false,
+    founderContext: false,
+  },
+  currentQuestion: "",
+  currentTargetDimension: "",
+  isLastQuestion: false,
+  mapState: { nodes: [], edges: [], activeNodeId: null },
+  explorationHistory: [],
+  branches: [],
+  activeBranchId: "main",
+  forkIndex: -1,
+  forkNewAnswer: "",
+  forkOriginalAnswer: "",
+  forkDimension: "",
+  expandNodeId: "",
+  messages: [],
 }
